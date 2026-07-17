@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr,Field
 class userdata(BaseModel):
     name: str
     role: str
@@ -54,6 +54,12 @@ class CustomProductResponse(BaseModel):
     store_id: int
     store_name: str
     store_description: str | None = None
+    
+class purchaseCreate(BaseModel):
+    product_id:int
+    quantity:int=Field(default=1,ge=1)
+    
+
 
     class Config:
         from_attribute=True

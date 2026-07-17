@@ -14,6 +14,7 @@ class User(Base):
     role = Column(String, default="customer", nullable=False)
     
     stores = relationship("Store", back_populates="owner", cascade="all, delete-orphan")
+    purchases=relationship("Purchase",back_populates="customer",cascade="all,delete-orphan")
 
 class Store(Base):
     __tablename__ = "stores"
@@ -40,3 +41,20 @@ class Product(Base):
     
     # Relationship
     store = relationship("Store", back_populates="products")
+    purchases=relationship("Purchase",back_populates="product")
+    
+    
+class Purchase(Base):
+    __tablename__="purchases"
+    id=Column(Integer,index=True,primary_key=True)
+    customer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    quantity = Column(Integer, nullable=False) 
+    price_at_purchase = Column(Float, nullable=False) 
+    total_amount = Column(Float, nullable=False) 
+    purchased_at = Column(DateTime, default=datetime.utcnow)
+    
+    
+    
+    customer = relationship("User", back_populates="purchases")
+    product = relationship("Product", back_populates="purchases")

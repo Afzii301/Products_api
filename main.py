@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
-from schemas import product_Create, product_Response, userCreate, userResponse, store_Create,CustomProductResponse
-from model import User, Product, Store
+from schemas import product_Create, product_Response, userCreate, userResponse, store_Create,CustomProductResponse,purchaseCreate
+from model import User, Product, Store,Purchase
 from sqlalchemy.orm import Session
 from Database import get_db, engine, Base
 from typing import List
@@ -8,13 +8,53 @@ from config import hash_password, verify_password, create_access_token, get_user
 
 Base.metadata.create_all(bind=engine)
  
-app = FastAPI(title="User_api", description="Api for managing products", version="2.0")
+app = FastAPI(
+    title="E-Commerce Store API",
+    description="""
+# 🛍️ E-Commerce Store API
+
+A complete RESTful API for an online shopping platform built with FastAPI.
+
+## Customer Features
+- 👤 User Registration & Login
+- 🔐 JWT Authentication
+- 📦 Browse Products
+- 🔍 Search & Filter Products
+- 🛒 Add, Update & Remove Cart Items
+- ❤️ Wishlist Management
+- 📋 Place Orders
+- 💳 Secure Checkout
+- 📦 Track Order Status
+
+## Admin Features
+- 👨‍💼 Admin Authentication
+- 📦 Product Management (Create, Update, Delete)
+- 🗂️ Category Management
+- 📊 Inventory & Stock Management
+- 📋 Order Management
+- 👥 Customer Management
+- 📈 Sales Dashboard
+
+## API Highlights
+- ⚡ High Performance with FastAPI
+- 📖 Interactive Swagger Documentation
+- ✅ Request Validation with Pydantic
+- 🔒 Secure REST API
+- 🗄️ Database Integration
+- 🚀 Scalable and Easy to Maintain
+
+This API is designed for modern e-commerce applications, providing a secure, fast, and reliable backend for online stores.
+""",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 def verify_admin(current_user: User = Depends(get_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only admin operation that perform")
     return current_user
-
+  
 
 @app.post("/register", status_code=201, response_model=userResponse)
 def create_user(user: userCreate, db: Session = Depends(get_db)):
@@ -72,11 +112,7 @@ def create_store(store_data: store_Create, db: Session = Depends(get_db), curren
 
 
 @app.post("/stores/{store_id}/products", response_model=CustomProductResponse, status_code=201)
-def create_product(
-    store_id: int, 
-    produc: product_Create, 
-    db: Session = Depends(get_db), 
-    current_admin: User = Depends(verify_admin)
+def create_product(store_id: int, produc: product_Create, db: Session = Depends(get_db), current_admin: User = Depends(verify_admin)
 ):
     store_obj = db.query(Store).filter(Store.id == store_id).first()
     if not store_obj:
@@ -153,3 +189,65 @@ def delete_product(product_id: int, db: Session = Depends(get_db), current_admin
         "message": "Product deleted successfully",
         "product": product_data
     }
+    
+@app.post("/purchases", status_code=status.HTTP_201_CREATED, response_model=None)
+def purchase_product(load: purchaseCreate,db: Session = Depends(get_db),current_user: User = Depends(get_user)
+):
+    if current_user.role != "customer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only customer buy this product"
+        )
+    product = db.query(Product).filter(Product.id == load.product_id).first()
+    
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,detail="Product not found"
+        )
+
+    if product.quantity < load.quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"check it get_endpoint  many item in quantity"
+        )
+    total_price = product.price * load.quantity
+
+    try:
+        product.quantity -= load.quantity
+
+        new_purchase = Purchase(
+            customer_id=current_user.id,    
+            product_id=product.id,
+            quantity=load.quantity,
+            price_at_purchase=product.price,
+            total_amount=total_price
+        )  
+
+        db.add(new_purchase)
+        db.commit() 
+        db.refresh(new_purchase)
+        
+        return {
+            "id": new_purchase.id,
+            "customer_id": current_user.id,
+            "customer_name": current_user.name,
+            
+            "product_id": product.id,
+            "product_name": product.name,
+            
+            "quantity": new_purchase.quantity,   
+            "price_at_purchase": new_purchase.price_at_purchase,
+            "total_amount": new_purchase.total_amount,
+            "purchased_at": new_purchase.purchased_at,
+            
+            "store_id": product.store.id,
+            "store_name": product.store.name,
+            "store_description": product.store.description 
+        }
+    except Exception as e:
+        db.rollback() 
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Purchase processing mein koi masla aaya hai. Dobara try karein."
+        )
+        
